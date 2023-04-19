@@ -14,13 +14,21 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
+#include <stdio.h>
+#include <math.h>
+#include <avr/io.h>
+#include <stdbool.h>
+
 
 #include "uart.h"
+#include "i2cmaster.h"
 
 
-/* Define UART buad rate here */
+// Define UART baud rate here
 #define UART_BAUD_RATE      9600      
 
+// Define i2c address
+#define I2C_DEVICE 0x58
 
 void itoa16(uint16_t value, char *str)
 {
@@ -52,7 +60,7 @@ void ADC_Init()
 	ADMUX |= (1 << REFS0);
 	ADMUX &= ~(1 << REFS1);
 
-	// Enable ADC and set ADC prescaler to 128 for 16MHz system clock
+	// Enable ADC and set ADC pre-scaler to 128 for 16MHz system clock
 	ADCSRA |= (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 }
 
@@ -69,51 +77,87 @@ uint16_t ADC_Read()
 	return ADC;
 }
 
+float convertToFloat(uint16_t input){
+	return (((float)input) / 1024.0) * 5.0;
+}
 
-int main(void)
-{
-    unsigned int c;
-	uint16_t ADC_value;
+void float_to_ascii(float num, char* str) {
+	int32_t whole_part = (int32_t) num;
+	int32_t fractional_part = (int32_t) ((num - whole_part) * 100.0); // Gives 2 digits of precision. Increase by multiple of 10 to increase number of digits displayed.
+	uint8_t i = 0;
 	
-    uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
-    
-    /*
-     * now enable interrupt, since UART library is interrupt controlled
-     */
-    sei();
+	bool isNegative = false;
 	
-	ADC_Init();
-   
-    uart_puts("Welcome to program.\n");
-	uart_puts("Please enter command:\n");
-    
-        
-    /* 
-     * Use standard avr-libc functions to convert numbers into string
-     * before transmitting via UART
-    
-    itoa( num, buffer, 10);   // convert interger into string (decimal format)         
-    uart_puts(buffer);        // and transmit string to UART
+	// Note: Digits are calculated in reverse order.
+	// First the fractional part is calculated.
+	// Then the whole part is calculated.
 
-	*/
-    
-    
-    while(1)
-    {
-        
-		
-        c = uart_getc();
-		ADC_value = ADC_Read();
-		
-		char digitString[7];
-		
-		itoa16(ADC_value, digitString);
-		
-		uart_puts(digitString);
-		
-		uart_putc('\n');
-		
-        if ( c & UART_NO_DATA )
+	if (num < 0.0) {
+		isNegative = true;
+		num = -num;
+		whole_part = (int32_t) num;
+		fractional_part = (int32_t) ((num - whole_part) * 1000.0); // Gives 3 digits of precision. Increase by multiple of 10 to increase number of digits displayed.
+	}
+	
+	while (fractional_part > 0) {
+		str[i++] = (fractional_part % 10) + '0';
+		fractional_part /= 10;
+	}
+	
+	if (i == 0){
+		// Must have at least one decimal point.
+		str[i++] = '0';
+	}
+
+	str[i++] = '.';
+	
+	uint8_t j = 0;
+
+	while (whole_part > 0) {
+		str[i + j++] = (whole_part % 10) + '0';
+		whole_part /= 10;
+	}
+
+	if (j == 0) {
+		str[i + j++] = '0';
+	}
+
+	i = i + j;
+
+	
+	if (isNegative){
+		str[i++] = '-';
+	}
+	
+	str[i] = '\0';
+
+	uint8_t k = 0;
+	j = i - 1;
+
+// Reverse digits. Because digits are calculated least-significant to most-significant, but are displayed most-significant to least-significant, the digits must be reversed.
+
+	while (k < j) {
+		char temp = str[k];
+		str[k++] = str[j];
+		str[j--] = temp;
+	}
+
+}
+
+float combineDigits(int ones, int tenths, int hundredths){
+	return ones + (((float) tenths)/10.0) + (((float) hundredths)/100.0);
+}
+
+unsigned char convertFloatToChar(float input){
+	return (input / 5.0) * 255;
+	};
+
+unsigned int read_UART(){
+	
+	uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) );
+	unsigned int c = uart_getc();
+	
+	if ( c & UART_NO_DATA )
         {
             /* 
              * no data available from UART 
@@ -147,17 +191,188 @@ int main(void)
                  */
                 uart_puts_P("Buffer overflow error: ");
             }
-            /* 
-             * send received character back
-             */
-            uart_putc( (unsigned char)c );
+			
         }
 		
-		_delay_ms(1000.0);
+		return c;
+	 
+	
+}
+
+
+int main(void)
+{
+    unsigned int c;
+	uint16_t ADC_value;
+	
+	uint8_t sinewave[64] = {128, 141, 153, 165, 177, 188, 199, 209, 219, 227, 234, 241, 246, 250, 254, 255, 255, 255, 254, 250, 246, 241, 234, 227, 219, 209, 199, 188, 177, 165, 153, 141, 128, 115, 103, 91, 79, 68, 57, 47, 37, 29, 22, 15, 10, 6, 2, 1, 0, 1, 2, 6, 10, 15, 22, 29, 37, 47, 57, 68, 79, 91, 103, 115};
+	
+    uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
+    
+    /*
+     * now enable interrupt, since UART library is interrupt controlled
+     */
+    sei();
+	
+	ADC_Init();
+	i2c_init();
+	
+   
+    uart_puts("Welcome to program.\n");
+	uart_puts("Please enter command:\n");
+    
+   
+    
+    while(1)
+    {
+        
+		uart_puts("Testing\n");
+        c = read_UART();
 		
+		if(c && UART_NO_DATA){
+			continue;
+		}
 		
+		if(c == 'G'){
+			// Single voltage mode.
+			char digitString[20];
+			ADC_value = ADC_Read();
+			float voltage = convertToFloat(ADC_value);
+			float_to_ascii(voltage, digitString);
+			uart_puts("v=");
+			uart_puts(digitString);
+			uart_puts(" V\n");
+			
+			while(!(c & UART_NO_DATA)){
+				read_UART(); // Read remaining characters until buffer is empty.
+			}
+			
+		}
+		else if (c == 'S'){
+			// Set DAC output voltage
+			
+			c = read_UART();
+			
+			if(c != ','){
+				uart_puts("Error. Command not recognized. Please try again.\n");
+			}
+			
+			int DAC_Channel;
+			c = read_UART();
+			
+			if(c == '0'){
+				DAC_Channel = 0;
+			} else if (c == '1'){
+				DAC_Channel = 1;
+			} else{
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+				
+			int ones, tenths, hundredths;
+				
+			c = read_UART(); // Expecting second comma
+				
+			if(c != ','){
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+					
+			c = read_UART(); // Get first digit.
+					
+			if(!(c >= 48 && c <= 57)){ // c is not a digit
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+
+			ones = c - 48; // Convert ASCII to digit.
+			
+			c = read_UART(); // Expecting .
+			
+			if(c != '.'){
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			c = read_UART(); // Expecting tenths.
+			
+			if(!(c >= 48 && c <= 57)){ // c is not a digit
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			tenths = c - 48;
+			
+			c = read_UART();
+			
+			if(!(c >= 48 && c <= 57)){ // c is not a digit
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			hundredths = c - 48;
+			
+			// Empty remaining UART buffer
+			while(!(c && UART_NO_DATA)){
+				read_UART();
+			}
+			
+			float valueToConvert = combineDigits(ones, tenths, hundredths);
+			
+			unsigned char DAC_value = convertFloatToChar(valueToConvert);
+			
+			if(DAC_Channel == 0){
+				
+				i2c_start(I2C_DEVICE+I2C_WRITE);
+				i2c_write(0x00);
+				i2c_write(DAC_value);
+				i2c_stop();
+				
+			}
+			else{
+				i2c_start(I2C_DEVICE+I2C_WRITE);
+				i2c_write(0x01);
+				i2c_write(DAC_value);
+				i2c_stop();
+			}
+			
+			char DAC_string[5];
+			
+			uart_puts("DAC channel ");
+			uart_putc(DAC_Channel + 48);
+			uart_puts(" set to ");
+			uart_putc(ones + 48);
+			uart_putc('.');
+			uart_putc(tenths + 48);
+			uart_putc(hundredths + 48);
+			uart_puts(" V (");
+			itoa16(DAC_value, DAC_string);
+			uart_puts(DAC_string);
+			uart_puts("d)\n");
 		
+			
+					
+		}
+		else if (c == 'W'){
+			
+			for(int i = 0; i < 64; ++i){
+				i2c_start(I2C_DEVICE+I2C_WRITE);
+				i2c_write(0x00);
+				i2c_write(sinewave[i]);
+				i2c_stop();
+				_delay_ms(1.25);
+				
+			}
+			
+		}
+		else {
+			uart_puts("Error. Command not recognized. Please try again.\n");
+			continue;
+		}
 		
-    }
+	
+		
+	}
+		
     
 }
