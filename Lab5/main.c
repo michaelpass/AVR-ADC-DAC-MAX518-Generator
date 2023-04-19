@@ -154,7 +154,7 @@ unsigned char convertFloatToChar(float input){
 
 unsigned int read_UART(){
 	
-	uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) );
+	// uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) );
 	unsigned int c = uart_getc();
 	
 	if ( c & UART_NO_DATA )
@@ -207,7 +207,7 @@ int main(void)
 	
 	uint8_t sinewave[64] = {128, 141, 153, 165, 177, 188, 199, 209, 219, 227, 234, 241, 246, 250, 254, 255, 255, 255, 254, 250, 246, 241, 234, 227, 219, 209, 199, 188, 177, 165, 153, 141, 128, 115, 103, 91, 79, 68, 57, 47, 37, 29, 22, 15, 10, 6, 2, 1, 0, 1, 2, 6, 10, 15, 22, 29, 37, 47, 57, 68, 79, 91, 103, 115};
 	
-    uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU) ); 
+    uart_init( UART_BAUD_SELECT(UART_BAUD_RATE,F_CPU)); 
     
     /*
      * now enable interrupt, since UART library is interrupt controlled
@@ -223,13 +223,11 @@ int main(void)
     
    
     
-    while(1)
-    {
-        
-		uart_puts("Testing\n");
-        c = read_UART();
+    while(1){
 		
-		if(c && UART_NO_DATA){
+		c = read_UART();
+		
+		if(c & UART_NO_DATA){
 			continue;
 		}
 		
@@ -244,13 +242,53 @@ int main(void)
 			uart_puts(" V\n");
 			
 			while(!(c & UART_NO_DATA)){
-				read_UART(); // Read remaining characters until buffer is empty.
+				c = read_UART(); // Read remaining characters until buffer is empty.
+				uart_putc(c);
+			}
+			
+		} else if (c == 'W'){
+			
+			_delay_ms(10.0);
+			c = read_UART();
+			
+			if(c != ","){
+				uart_puts("Error. Command not recognized. Please try again.\n");
+			}
+			
+	
+			
+			for(int j = 0; j < 100; ++j){
+				for(int i = 0; i < 64; ++i){
+					i2c_start(I2C_DEVICE+I2C_WRITE);
+					i2c_write(0x00);
+					i2c_write(sinewave[i]);
+					i2c_stop();
+					_delay_ms(1.25);
+				}
+			}
+			
+			
+		} else if (c == 'T'){
+			
+			_delay_ms(10.0);
+			
+			c = read_UART();
+			
+			if(c & UART_NO_DATA){
+				uart_puts("No data!\n");
+			}
+			
+			if (c == 'c'){
+				uart_puts("Success!\n");
+			} else{
+				uart_puts("Failure.\n");
 			}
 			
 		}
 		else if (c == 'S'){
 			// Set DAC output voltage
 			
+			_delay_ms(10.0);
 			c = read_UART();
 			
 			if(c != ','){
@@ -258,28 +296,32 @@ int main(void)
 			}
 			
 			int DAC_Channel;
+			
+			_delay_ms(10.0);
 			c = read_UART();
 			
 			if(c == '0'){
 				DAC_Channel = 0;
-			} else if (c == '1'){
+				} else if (c == '1'){
 				DAC_Channel = 1;
-			} else{
+				} else{
 				uart_puts("Error. Command not recognized. Please try again.\n");
 				continue;
 			}
-				
+			
 			int ones, tenths, hundredths;
-				
+			
+			_delay_ms(10.0);
 			c = read_UART(); // Expecting second comma
-				
+			
 			if(c != ','){
 				uart_puts("Error. Command not recognized. Please try again.\n");
 				continue;
 			}
-					
+			
+			_delay_ms(10.0);
 			c = read_UART(); // Get first digit.
-					
+			
 			if(!(c >= 48 && c <= 57)){ // c is not a digit
 				uart_puts("Error. Command not recognized. Please try again.\n");
 				continue;
@@ -287,6 +329,7 @@ int main(void)
 
 			ones = c - 48; // Convert ASCII to digit.
 			
+			_delay_ms(10.0);
 			c = read_UART(); // Expecting .
 			
 			if(c != '.'){
@@ -294,6 +337,8 @@ int main(void)
 				continue;
 			}
 			
+			
+			_delay_ms(10.0);
 			c = read_UART(); // Expecting tenths.
 			
 			if(!(c >= 48 && c <= 57)){ // c is not a digit
@@ -303,6 +348,7 @@ int main(void)
 			
 			tenths = c - 48;
 			
+			_delay_ms(10.0);
 			c = read_UART();
 			
 			if(!(c >= 48 && c <= 57)){ // c is not a digit
@@ -313,8 +359,9 @@ int main(void)
 			hundredths = c - 48;
 			
 			// Empty remaining UART buffer
-			while(!(c && UART_NO_DATA)){
-				read_UART();
+			while(!(c & UART_NO_DATA)){
+				_delay_ms(10.0);
+				c = read_UART();
 			}
 			
 			float valueToConvert = combineDigits(ones, tenths, hundredths);
@@ -349,10 +396,11 @@ int main(void)
 			itoa16(DAC_value, DAC_string);
 			uart_puts(DAC_string);
 			uart_puts("d)\n");
-		
 			
-					
+			
+			
 		}
+		/*
 		else if (c == 'W'){
 			
 			for(int i = 0; i < 64; ++i){
@@ -365,14 +413,16 @@ int main(void)
 			}
 			
 		}
+		*/
+		
+		/*
 		else {
 			uart_puts("Error. Command not recognized. Please try again.\n");
 			continue;
-		}
+		}*/
+        
 		
-	
 		
 	}
-		
-    
+	
 }
