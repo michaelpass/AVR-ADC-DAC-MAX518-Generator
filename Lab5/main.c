@@ -251,21 +251,97 @@ int main(void)
 			_delay_ms(10.0);
 			c = read_UART();
 			
-			if(c != ","){
+			if(c != ','){
 				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
 			}
 			
-	
+			_delay_ms(10.0);
+			c = read_UART();
 			
-			for(int j = 0; j < 100; ++j){
-				for(int i = 0; i < 64; ++i){
-					i2c_start(I2C_DEVICE+I2C_WRITE);
-					i2c_write(0x00);
-					i2c_write(sinewave[i]);
-					i2c_stop();
-					_delay_ms(1.25);
+			int DAC_channel;
+			
+			if(c == '0'){
+				DAC_channel = 0;
+			} else if(c == '1'){
+				DAC_channel = 1;
+			} else {
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			_delay_ms(10.0);
+			c = read_UART();
+			
+			if(c != ','){ // Second comma
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			_delay_ms(10.0);
+			c = read_UART();
+			
+			int DAC_freq;
+			
+			if(c == '1'){
+				DAC_freq = 1;
+			} else if (c == '2'){
+				DAC_freq = 2;
+			} else {
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			_delay_ms(10.0);
+			c = read_UART();
+			
+			if(c != '0'){
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			_delay_ms(10.0);
+			c = read_UART();
+			
+			if(c != ','){
+				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
+			}
+			
+			
+			
+			if(DAC_channel == 0){
+				for(int j = 0; j < 100; ++j){
+					for(int i = 0; i < 64; ++i){
+						i2c_start(I2C_DEVICE+I2C_WRITE);
+						i2c_write(0x00);
+						i2c_write(sinewave[i]);
+						i2c_stop();
+						if(DAC_freq == 1){
+							_delay_ms(1.25);
+							} else{
+							_delay_ms(0.5);
+						}
+					}
 				}
+			} else {
+				for(int j = 0; j < 100; ++j){
+					for(int i = 0; i < 64; ++i){
+						i2c_start(I2C_DEVICE+I2C_WRITE);
+						i2c_write(0x01);
+						i2c_write(sinewave[i]);
+						i2c_stop();
+						if(DAC_freq == 1){
+							_delay_ms(1.25);
+							} else{
+							_delay_ms(0.5);
+						}
+					}
+				}
+				
 			}
+			
+			
 			
 			
 		} else if (c == 'T'){
@@ -293,6 +369,7 @@ int main(void)
 			
 			if(c != ','){
 				uart_puts("Error. Command not recognized. Please try again.\n");
+				continue;
 			}
 			
 			int DAC_Channel;
