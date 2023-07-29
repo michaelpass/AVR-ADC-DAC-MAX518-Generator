@@ -1,5 +1,13 @@
 /*
- * Lab5.c
+ * main.c
+ 
+ * This project creates a primitive ADC/DAC that is operable via a terminal emulator
+ * with 9600 baud rate. This program allows one to read analog voltages and to manually set both channels of an external MAX518 DAC.
+ * 
+ * Commands:
+ * G - Get analog voltage from pin ADC0
+ * S,C,x.xx - Sets channel C voltage to x.xx volts
+ * W,C,xx,yy - Generate sine waves on channel C, at frequency xx, yy number of times. C = [0, 1], xx = [10, 20] y = [00-99]
  *
  * Created: 4/12/2023 4:24:31 PM
  * Author : stlondon, mpass
